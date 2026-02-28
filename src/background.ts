@@ -1,10 +1,62 @@
 import type { Message, RecordingState } from './types';
 
-let recordingState: RecordingState = 'idle';
-let recordingStartTime: number | null = null;
-let recordingTabId: number | null = null;
+// --- 状態管理（chrome.storage で永続化し、Service Worker再起動に耐える） ---
 
-// Offscreen Document管理
+interface RecordingInfo {
+  state: RecordingState;
+  startTime: number | null;
+  tabId: number | null;
+  tabUrl: string | null;
+}
+
+const DEFAULT_INFO: RecordingInfo = {
+  state: 'idle',
+  startTime: null,
+  tabId: null,
+  tabUrl: null,
+};
+
+// メモリキャッシュ（高速アクセス用）
+let info: RecordingInfo = { ...DEFAULT_INFO };
+
+async function loadState(): Promise<void> {
+  const result = await chrome.storage.session.get('recordingInfo');
+  if (result.recordingInfo) {
+    info = result.recordingInfo as RecordingInfo;
+    updateBadge(info.state);
+  }
+}
+
+async function saveState(patch: Partial<RecordingInfo>): Promise<void> {
+  Object.assign(info, patch);
+  await chrome.storage.session.set({ recordingInfo: info });
+  updateBadge(info.state);
+}
+
+// Service Worker 起動時に状態を復元
+loadState();
+
+// --- Keep-alive: 録音中はService Workerがスリープしないよう定期ping ---
+
+const KEEPALIVE_ALARM = 'meetscribe-keepalive';
+
+function startKeepAlive(): void {
+  chrome.alarms.create(KEEPALIVE_ALARM, { periodInMinutes: 0.4 }); // 24秒ごと
+}
+
+function stopKeepAlive(): void {
+  chrome.alarms.clear(KEEPALIVE_ALARM);
+}
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === KEEPALIVE_ALARM) {
+    // Service Worker を起こすだけ。状態を再読み込み。
+    loadState();
+  }
+});
+
+// --- Offscreen Document 管理 ---
+
 async function ensureOffscreenDocument(): Promise<void> {
   const existingContexts = await chrome.runtime.getContexts({
     contextTypes: [chrome.runtime.ContextType.OFFSCREEN_DOCUMENT],
@@ -30,7 +82,8 @@ async function closeOffscreenDocument(): Promise<void> {
   }
 }
 
-// バッジ表示
+// --- バッジ ---
+
 function updateBadge(state: RecordingState): void {
   if (state === 'recording') {
     chrome.action.setBadgeText({ text: 'REC' });
@@ -43,30 +96,30 @@ function updateBadge(state: RecordingState): void {
   }
 }
 
-function setState(state: RecordingState): void {
-  recordingState = state;
-  updateBadge(state);
-}
+// --- Offscreenへのメッセージ送信（再試行付き） ---
 
-// Offscreenにメッセージを送信（準備完了まで再試行）
 async function sendToOffscreen(message: Message, retries = 10): Promise<void> {
   for (let i = 0; i < retries; i++) {
     try {
       await chrome.runtime.sendMessage(message);
       return;
     } catch {
-      // Offscreenがまだロードされていない場合、少し待って再試行
       await new Promise((r) => setTimeout(r, 300));
     }
   }
   throw new Error('Offscreen Documentとの通信に失敗しました');
 }
 
-// 録音開始
+// --- 録音開始 / 停止 ---
+
 async function startRecording(tabId: number): Promise<void> {
   try {
     // 前回のストリームが残っている場合はクリーンアップ
     await closeOffscreenDocument();
+
+    // タブのURLを記録（URL変更検知用）
+    const tab = await chrome.tabs.get(tabId);
+    const tabOrigin = tab.url ? new URL(tab.url).origin : null;
 
     // タブの音声ストリームIDを取得
     const streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tabId });
@@ -74,46 +127,70 @@ async function startRecording(tabId: number): Promise<void> {
     // Offscreen Documentを新規作成
     await ensureOffscreenDocument();
 
-    // Offscreenに録音開始を指示（ロード完了まで再試行）
+    // Offscreenに録音開始を指示
     await sendToOffscreen({ type: 'start-capture', streamId });
 
-    recordingTabId = tabId;
-    recordingStartTime = Date.now();
-    setState('recording');
+    // 状態を永続化
+    await saveState({
+      state: 'recording',
+      startTime: Date.now(),
+      tabId,
+      tabUrl: tabOrigin,
+    });
+
+    // Keep-alive開始
+    startKeepAlive();
   } catch (err) {
-    console.error('録音開始エラー:', err);
-    setState('idle');
+    console.error('[MeetScribe] 録音開始エラー:', err);
+    await saveState({ ...DEFAULT_INFO });
+    stopKeepAlive();
     throw err;
   }
 }
 
-// 録音停止
 async function stopRecording(): Promise<void> {
-  setState('processing');
-  chrome.runtime.sendMessage({ type: 'stop-capture' } satisfies Message);
+  await saveState({ state: 'processing' });
+  stopKeepAlive();
+  try {
+    await chrome.runtime.sendMessage({ type: 'stop-capture' } satisfies Message);
+  } catch {
+    // Offscreenが既に閉じている場合
+    console.warn('[MeetScribe] Offscreenへの停止メッセージ送信失敗');
+    await saveState({ ...DEFAULT_INFO });
+  }
 }
 
-// タブが閉じられたら録音を自動停止して保存
-chrome.tabs.onRemoved.addListener((tabId) => {
-  if (recordingState === 'recording' && recordingTabId === tabId) {
-    console.log('[MeetScribe] 録音中のタブが閉じられました。録音を自動停止します。');
-    stopRecording();
+// --- タブ監視 ---
+
+// タブが閉じられたら録音を自動停止
+chrome.tabs.onRemoved.addListener(async (tabId) => {
+  await loadState();
+  if (info.state === 'recording' && info.tabId === tabId) {
+    console.log('[MeetScribe] 録音中のタブが閉じられました。自動停止します。');
+    await stopRecording();
   }
 });
 
-// タブのURLが変わったら録音を自動停止して保存
-chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
-  if (
-    recordingState === 'recording' &&
-    recordingTabId === tabId &&
-    changeInfo.url
-  ) {
-    console.log('[MeetScribe] 録音中のタブのURLが変更されました。録音を自動停止します。');
-    stopRecording();
+// タブのURL origin が変わったら録音を自動停止（SPA内遷移は無視）
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo) => {
+  if (!changeInfo.url) return;
+  await loadState();
+  if (info.state !== 'recording' || info.tabId !== tabId) return;
+
+  // origin レベルで比較（YouTubeのSPA内遷移では停止しない）
+  try {
+    const newOrigin = new URL(changeInfo.url).origin;
+    if (info.tabUrl && newOrigin !== info.tabUrl) {
+      console.log('[MeetScribe] 録音中のタブが別サイトに遷移しました。自動停止します。');
+      await stopRecording();
+    }
+  } catch {
+    // URL解析失敗は無視
   }
 });
 
-// メッセージハンドラ
+// --- メッセージハンドラ ---
+
 chrome.runtime.onMessage.addListener(
   (message: Message, _sender, sendResponse) => {
     switch (message.type) {
@@ -121,23 +198,23 @@ chrome.runtime.onMessage.addListener(
         startRecording(message.tabId)
           .then(() => sendResponse({ success: true }))
           .catch((err) => sendResponse({ success: false, error: String(err) }));
-        return true; // 非同期レスポンス
+        return true;
 
       case 'stop-recording':
-        stopRecording();
-        sendResponse({ success: true });
-        break;
+        stopRecording().then(() => sendResponse({ success: true }));
+        return true;
 
       case 'get-state':
-        sendResponse({
-          state: recordingState,
-          startTime: recordingStartTime,
+        loadState().then(() => {
+          sendResponse({
+            state: info.state,
+            startTime: info.startTime,
+          });
         });
-        break;
+        return true;
 
       case 'recording-stopped': {
-        // Offscreenから音声データ受信 → storage に保存して結果ページを開く
-        const duration = recordingStartTime ? Date.now() - recordingStartTime : 0;
+        const duration = info.startTime ? Date.now() - info.startTime : 0;
         const resultId = `result_${Date.now()}`;
 
         chrome.storage.local.set({
@@ -150,25 +227,21 @@ chrome.runtime.onMessage.addListener(
           },
         });
 
-        // 結果ページを開く
         chrome.tabs.create({
           url: chrome.runtime.getURL(`results.html?id=${resultId}`),
         });
 
-        // クリーンアップ
         closeOffscreenDocument();
-        recordingTabId = null;
-        recordingStartTime = null;
-        setState('idle');
+        saveState({ ...DEFAULT_INFO });
+        stopKeepAlive();
         break;
       }
 
       case 'recording-error':
-        console.error('録音エラー:', message.error);
+        console.error('[MeetScribe] 録音エラー:', message.error);
         closeOffscreenDocument();
-        recordingTabId = null;
-        recordingStartTime = null;
-        setState('idle');
+        saveState({ ...DEFAULT_INFO });
+        stopKeepAlive();
         break;
     }
   }
