@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "MeetScribe - AI議事録",
+  "version": "1.0.0",
+  "description": "MeetScribe - 会議タブの音声をキャプチャし、AIで文字起こし+要約を生成するChrome拡張",
+  "permissions": [
+    "tabCapture",
+    "offscreen",
+    "storage",
+    "activeTab",
+    "tabs"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

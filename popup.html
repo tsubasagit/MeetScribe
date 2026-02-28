@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <h1>MeetScribe</h1>
+    <p class="subtitle">AI議事録</p>
+
+    <div id="status" class="status idle">待機中</div>
+    <div id="timer" class="timer">00:00:00</div>
+
+    <button id="btn-record" class="btn btn-start">録音開始</button>
+
+    <div class="footer">
+      <a href="#" id="link-results">前回の結果を見る</a>
+      <a href="#" id="link-settings">設定</a>
+    </div>
+
+    <!-- 設定パネル（トグル表示） -->
+    <div id="settings-panel" class="settings-panel hidden">
+      <h2>設定</h2>
+      <label>
+        Gemini API Key（MeetScribe用）
+        <input type="password" id="input-api-key" placeholder="AIza...">
+      </label>
+      <label>
+        出力言語
+        <select id="select-language">
+          <option value="ja" selected>日本語</option>
+          <option value="en">English</option>
+        </select>
+      </label>
+      <button id="btn-save-settings" class="btn btn-small">保存</button>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

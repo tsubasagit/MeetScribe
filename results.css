@@ -1,0 +1,169 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Segoe UI', 'Hiragino Sans', sans-serif;
+  background: #0f0f23;
+  color: #e0e0e0;
+  line-height: 1.6;
+}
+
+.container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 32px 24px;
+}
+
+header {
+  margin-bottom: 24px;
+}
+
+header h1 {
+  font-size: 24px;
+  color: #fff;
+}
+
+.meta {
+  font-size: 13px;
+  color: #888;
+  margin-top: 4px;
+}
+
+.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 60px 0;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #333;
+  border-top-color: #6a8aff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading p {
+  color: #aaa;
+  font-size: 14px;
+}
+
+.section {
+  margin-bottom: 24px;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.section-header h2 {
+  font-size: 16px;
+  color: #ccc;
+}
+
+.btn-copy {
+  padding: 4px 12px;
+  border: 1px solid #444;
+  border-radius: 4px;
+  background: #2a2a4a;
+  color: #aaa;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-copy:hover {
+  background: #3a3a6a;
+  color: #fff;
+}
+
+.btn-copy.copied {
+  background: #2a4a2a;
+  border-color: #4CAF50;
+  color: #4CAF50;
+}
+
+.card {
+  background: #1a1a2e;
+  border: 1px solid #2a2a4a;
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.card h3 {
+  font-size: 14px;
+  color: #6a8aff;
+  margin: 16px 0 8px;
+}
+
+.card h3:first-child {
+  margin-top: 0;
+}
+
+.card ul {
+  padding-left: 20px;
+}
+
+.card li {
+  margin-bottom: 4px;
+  font-size: 14px;
+}
+
+.action-item {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 6px 0;
+  border-bottom: 1px solid #2a2a4a;
+  font-size: 14px;
+}
+
+.action-item:last-child {
+  border-bottom: none;
+}
+
+.action-item .assignee {
+  color: #6a8aff;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.action-item .deadline {
+  color: #ff8a44;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.transcript {
+  white-space: pre-wrap;
+  font-size: 13px;
+  font-family: 'Consolas', 'Hiragino Kaku Gothic Pro', monospace;
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.error {
+  padding: 16px;
+  background: #4a1a1a;
+  border: 1px solid #ff4444;
+  border-radius: 8px;
+  color: #ff8888;
+  font-size: 14px;
+}
+
+.hidden {
+  display: none !important;
+}

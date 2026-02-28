@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MeetScribe - 議事録</title>
+  <link rel="stylesheet" href="results.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>MeetScribe</h1>
+      <p id="meeting-meta" class="meta"></p>
+    </header>
+
+    <div id="loading" class="loading">
+      <div class="spinner"></div>
+      <p id="loading-text">音声を処理しています...</p>
+    </div>
+
+    <div id="content" class="hidden">
+      <!-- 要約セクション -->
+      <section class="section">
+        <div class="section-header">
+          <h2>要約</h2>
+          <button class="btn-copy" data-target="summary">コピー</button>
+        </div>
+        <div id="summary" class="card">
+          <div id="summary-overview"></div>
+
+          <h3>議論ポイント</h3>
+          <ul id="summary-discussion"></ul>
+
+          <h3>決定事項</h3>
+          <ul id="summary-decisions"></ul>
+
+          <h3>アクションアイテム</h3>
+          <div id="summary-actions"></div>
+        </div>
+      </section>
+
+      <!-- 文字起こしセクション -->
+      <section class="section">
+        <div class="section-header">
+          <h2>文字起こし</h2>
+          <button class="btn-copy" data-target="transcript">コピー</button>
+        </div>
+        <pre id="transcript" class="card transcript"></pre>
+      </section>
+    </div>
+
+    <div id="error" class="error hidden"></div>
+  </div>
+
+  <script src="results.js"></script>
+</body>
+</html>
