@@ -172,6 +172,96 @@ h1 {
   font-size: 13px;
 }
 
+/* 同意確認モーダル */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.modal {
+  background: #2a2a4a;
+  border-radius: 12px;
+  padding: 20px;
+  margin: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.modal-icon {
+  font-size: 32px;
+  color: #ffb74d;
+}
+
+.modal h2 {
+  font-size: 15px;
+  color: #fff;
+  margin: 0;
+}
+
+.modal-desc {
+  font-size: 12px;
+  color: #bbb;
+  line-height: 1.6;
+}
+
+.consent-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #e0e0e0;
+  cursor: pointer;
+  padding: 8px 12px;
+  background: #1a1a2e;
+  border-radius: 6px;
+  width: 100%;
+}
+
+.consent-check input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #4CAF50;
+  cursor: pointer;
+}
+
+.modal-buttons {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+.modal-buttons .btn {
+  flex: 1;
+  padding: 10px;
+  font-size: 13px;
+}
+
+.btn-consent-start {
+  background: #4CAF50;
+  color: #fff;
+}
+
+.btn-consent-start:hover:not(:disabled) {
+  background: #45a049;
+}
+
+.btn-consent-start:disabled {
+  background: #555;
+  cursor: not-allowed;
+  transform: none;
+}
+
 .hidden {
   display: none !important;
 }

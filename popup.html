@@ -19,6 +19,23 @@
       <a href="#" id="link-settings">設定</a>
     </div>
 
+    <!-- 同意確認モーダル -->
+    <div id="consent-modal" class="modal-overlay hidden">
+      <div class="modal">
+        <div class="modal-icon">&#9888;</div>
+        <h2>録音前の確認</h2>
+        <p class="modal-desc">この録音は会議タブの音声をキャプチャします。<br>参加者のプライバシーを尊重し、<strong>必ず事前に録音の同意を得てください。</strong></p>
+        <label class="consent-check">
+          <input type="checkbox" id="consent-checkbox">
+          <span>参加者に録音することを伝えました</span>
+        </label>
+        <div class="modal-buttons">
+          <button id="btn-consent-cancel" class="btn btn-small">キャンセル</button>
+          <button id="btn-consent-ok" class="btn btn-consent-start" disabled>録音開始</button>
+        </div>
+      </div>
+    </div>
+
     <!-- 設定パネル（トグル表示） -->
     <div id="settings-panel" class="settings-panel hidden">
       <h2>設定</h2>

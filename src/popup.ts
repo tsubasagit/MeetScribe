@@ -10,6 +10,12 @@ const inputApiKey = document.getElementById('input-api-key') as HTMLInputElement
 const selectLanguage = document.getElementById('select-language') as HTMLSelectElement;
 const btnSaveSettings = document.getElementById('btn-save-settings') as HTMLButtonElement;
 
+// 同意確認モーダル
+const consentModal = document.getElementById('consent-modal') as HTMLDivElement;
+const consentCheckbox = document.getElementById('consent-checkbox') as HTMLInputElement;
+const btnConsentOk = document.getElementById('btn-consent-ok') as HTMLButtonElement;
+const btnConsentCancel = document.getElementById('btn-consent-cancel') as HTMLButtonElement;
+
 let currentState: RecordingState = 'idle';
 let startTime: number | null = null;
 let timerInterval: ReturnType<typeof setInterval> | null = null;
@@ -68,6 +74,47 @@ function stopTimer(): void {
   timerEl.textContent = '00:00:00';
 }
 
+// 同意確認モーダル制御
+consentCheckbox.addEventListener('change', () => {
+  btnConsentOk.disabled = !consentCheckbox.checked;
+});
+
+btnConsentCancel.addEventListener('click', () => {
+  consentModal.classList.add('hidden');
+  consentCheckbox.checked = false;
+  btnConsentOk.disabled = true;
+});
+
+// 同意後に実際に録音を開始
+async function beginRecording(): Promise<void> {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.id) {
+    alert('アクティブなタブが見つかりません');
+    return;
+  }
+
+  btnRecord.disabled = true;
+  const response = await chrome.runtime.sendMessage({
+    type: 'start-recording',
+    tabId: tab.id,
+  } satisfies Message);
+
+  if (response?.success) {
+    updateUI('recording');
+    startTimer(Date.now());
+  } else {
+    alert(`録音開始に失敗しました: ${response?.error || '不明なエラー'}`);
+    btnRecord.disabled = false;
+  }
+}
+
+btnConsentOk.addEventListener('click', () => {
+  consentModal.classList.add('hidden');
+  consentCheckbox.checked = false;
+  btnConsentOk.disabled = true;
+  beginRecording();
+});
+
 // 録音ボタン
 btnRecord.addEventListener('click', async () => {
   if (currentState === 'idle') {
@@ -80,27 +127,8 @@ btnRecord.addEventListener('click', async () => {
       return;
     }
 
-    // アクティブタブを取得
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.id) {
-      alert('アクティブなタブが見つかりません');
-      return;
-    }
-
-    // 録音開始
-    btnRecord.disabled = true;
-    const response = await chrome.runtime.sendMessage({
-      type: 'start-recording',
-      tabId: tab.id,
-    } satisfies Message);
-
-    if (response?.success) {
-      updateUI('recording');
-      startTimer(Date.now());
-    } else {
-      alert(`録音開始に失敗しました: ${response?.error || '不明なエラー'}`);
-      btnRecord.disabled = false;
-    }
+    // 同意確認モーダルを表示
+    consentModal.classList.remove('hidden');
   } else if (currentState === 'recording') {
     // 録音停止
     chrome.runtime.sendMessage({ type: 'stop-recording' } satisfies Message);

@@ -33,7 +33,9 @@ MeetScribe は **Chrome のタブ音声をキャプチャ** し、**Gemini API �
 
 ### 2. 録音
 
-会議中に拡張アイコンをクリック → 「録音開始」
+会議中に拡張アイコンをクリック → 「録音開始」→ 参加者への同意確認を行ってから録音スタート
+
+![同意確認](docs/popup-consent-screenshot.png)
 
 ![録音中](docs/popup-recording-screenshot.png)
 
