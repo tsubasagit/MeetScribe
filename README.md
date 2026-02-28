@@ -48,6 +48,8 @@ MeetScribe は **Chrome のタブ音声をキャプチャ** し、**Gemini API �
   - 決定事項
   - アクションアイテム（担当者・期限付き）
 
+![結果画面](docs/results-screenshot.png)
+
 ワンクリックで Markdown 形式にコピーし、Google ドキュメントや Google Drive に保存できます。
 
 ## コスト
