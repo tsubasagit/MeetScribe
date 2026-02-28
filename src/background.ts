@@ -13,8 +13,11 @@ async function ensureOffscreenDocument(): Promise<void> {
 
   await chrome.offscreen.createDocument({
     url: 'offscreen.html',
-    reasons: [chrome.offscreen.Reason.USER_MEDIA],
-    justification: 'タブ音声の録音処理',
+    reasons: [
+      chrome.offscreen.Reason.USER_MEDIA,
+      chrome.offscreen.Reason.AUDIO_PLAYBACK,
+    ],
+    justification: 'タブ音声のキャプチャと録音処理',
   });
 }
 
@@ -45,6 +48,20 @@ function setState(state: RecordingState): void {
   updateBadge(state);
 }
 
+// Offscreenにメッセージを送信（準備完了まで再試行）
+async function sendToOffscreen(message: Message, retries = 10): Promise<void> {
+  for (let i = 0; i < retries; i++) {
+    try {
+      await chrome.runtime.sendMessage(message);
+      return;
+    } catch {
+      // Offscreenがまだロードされていない場合、少し待って再試行
+      await new Promise((r) => setTimeout(r, 300));
+    }
+  }
+  throw new Error('Offscreen Documentとの通信に失敗しました');
+}
+
 // 録音開始
 async function startRecording(tabId: number): Promise<void> {
   try {
@@ -54,8 +71,8 @@ async function startRecording(tabId: number): Promise<void> {
     // Offscreen Documentを準備
     await ensureOffscreenDocument();
 
-    // Offscreenに録音開始を指示
-    chrome.runtime.sendMessage({ type: 'start-capture', streamId } satisfies Message);
+    // Offscreenに録音開始を指示（ロード完了まで再試行）
+    await sendToOffscreen({ type: 'start-capture', streamId });
 
     recordingTabId = tabId;
     recordingStartTime = Date.now();

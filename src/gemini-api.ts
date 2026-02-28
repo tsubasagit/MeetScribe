@@ -1,7 +1,7 @@
 import type { GeminiResponse, MeetingSummary, Settings } from './types';
 
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
-const MODEL = 'gemini-2.0-flash-001';
+const MODEL = 'gemini-2.5-flash';
 
 async function callGemini(
   apiKey: string,
@@ -12,7 +12,9 @@ async function callGemini(
     contents: [{ role: 'user', parts }],
     generationConfig: {
       temperature: 0.1,
-      maxOutputTokens: 8192,
+      maxOutputTokens: 16384,
+      // Gemini 2.5 Flash: 思考モードをオフにして安定した出力を得る
+      thinkingConfig: { thinkingBudget: 0 },
     },
   };
 
@@ -31,15 +33,37 @@ async function callGemini(
     }
   );
 
-  const data: GeminiResponse = await response.json();
+  const data = await response.json();
 
   if (data.error) {
     throw new Error(`Gemini API エラー: ${data.error.message} (code: ${data.error.code})`);
   }
 
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  // Gemini 2.5 は思考パーツを含む場合がある。テキストパーツを探す
+  const responseParts = data.candidates?.[0]?.content?.parts;
+  if (!responseParts || responseParts.length === 0) {
+    throw new Error(`Gemini APIから有効な応答がありませんでした: ${JSON.stringify(data).slice(0, 500)}`);
+  }
+
+  // thought=true でないテキストパーツを探す。なければ最後のテキストパーツを使う
+  let text = '';
+  for (const part of responseParts) {
+    if (part.text && !part.thought) {
+      text = part.text;
+    }
+  }
+  // 見つからなければ、どのパーツでもテキストがあれば使う
   if (!text) {
-    throw new Error('Gemini APIから有効な応答がありませんでした');
+    for (const part of responseParts) {
+      if (part.text) {
+        text = part.text;
+        break;
+      }
+    }
+  }
+
+  if (!text) {
+    throw new Error(`Gemini APIから有効な応答がありませんでした: ${JSON.stringify(responseParts).slice(0, 500)}`);
   }
 
   return text;

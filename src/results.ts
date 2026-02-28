@@ -156,8 +156,21 @@ async function processAudio(): Promise<void> {
 
     const { id, audioBase64, mimeType, duration, timestamp } = pendingAudio;
 
-    // メタ情報表示
-    metaEl.textContent = `${formatDate(timestamp)} | 録音時間: ${formatDuration(duration)}`;
+    // 音声データサイズ（デバッグ用）
+    const audioSizeKB = Math.round(audioBase64.length * 3 / 4 / 1024);
+    metaEl.textContent = `${formatDate(timestamp)} | 録音時間: ${formatDuration(duration)} | 音声: ${audioSizeKB}KB | 形式: ${mimeType}`;
+
+    // デバッグ用: 録音音声の再生ボタン
+    const audioBlob = new Blob(
+      [Uint8Array.from(atob(audioBase64), c => c.charCodeAt(0))],
+      { type: mimeType }
+    );
+    const audioUrl = URL.createObjectURL(audioBlob);
+    const audioEl = document.createElement('audio');
+    audioEl.controls = true;
+    audioEl.src = audioUrl;
+    audioEl.style.cssText = 'width:100%;margin:8px 0;';
+    metaEl.after(audioEl);
 
     // サイズチェック
     if (!canSendInline(audioBase64)) {
@@ -165,8 +178,14 @@ async function processAudio(): Promise<void> {
       return;
     }
 
+    // 音声が実質空でないか確認
+    if (audioSizeKB < 1) {
+      showError(`音声データが空です（${audioSizeKB}KB）。タブで音声が再生されているか確認してください。`);
+      return;
+    }
+
     // Phase1: 文字起こし
-    loadingTextEl.textContent = '音声を文字起こし中...（1/2）';
+    loadingTextEl.textContent = `音声を文字起こし中...（1/2）[${audioSizeKB}KB]`;
     const transcript = await transcribeAudio(
       settings.geminiApiKey,
       audioBase64,
