@@ -65,10 +65,13 @@ async function sendToOffscreen(message: Message, retries = 10): Promise<void> {
 // 録音開始
 async function startRecording(tabId: number): Promise<void> {
   try {
+    // 前回のストリームが残っている場合はクリーンアップ
+    await closeOffscreenDocument();
+
     // タブの音声ストリームIDを取得
     const streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tabId });
 
-    // Offscreen Documentを準備
+    // Offscreen Documentを新規作成
     await ensureOffscreenDocument();
 
     // Offscreenに録音開始を指示（ロード完了まで再試行）
@@ -89,6 +92,26 @@ async function stopRecording(): Promise<void> {
   setState('processing');
   chrome.runtime.sendMessage({ type: 'stop-capture' } satisfies Message);
 }
+
+// タブが閉じられたら録音を自動停止して保存
+chrome.tabs.onRemoved.addListener((tabId) => {
+  if (recordingState === 'recording' && recordingTabId === tabId) {
+    console.log('[MeetScribe] 録音中のタブが閉じられました。録音を自動停止します。');
+    stopRecording();
+  }
+});
+
+// タブのURLが変わったら録音を自動停止して保存
+chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  if (
+    recordingState === 'recording' &&
+    recordingTabId === tabId &&
+    changeInfo.url
+  ) {
+    console.log('[MeetScribe] 録音中のタブのURLが変更されました。録音を自動停止します。');
+    stopRecording();
+  }
+});
 
 // メッセージハンドラ
 chrome.runtime.onMessage.addListener(
