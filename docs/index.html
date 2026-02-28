@@ -1,0 +1,1422 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MeetScribe - AI議事録 Chrome拡張</title>
+  <meta name="description" content="自分が主催していない会議やウェビナーでも、ワンクリックで議事録を残せる。Chromeのタブ音声をキャプチャし、Gemini AIで文字起こし+要約を自動生成。">
+  <meta property="og:title" content="MeetScribe - AI議事録 Chrome拡張">
+  <meta property="og:description" content="自分が主催していない会議やウェビナーでも、ワンクリックで議事録を残せる Chrome拡張">
+  <meta property="og:type" content="website">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+JP:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg-primary: #0b0f1a;
+      --bg-secondary: #111827;
+      --bg-card: #1a2035;
+      --bg-card-hover: #1f2847;
+      --border-color: #2a3352;
+      --text-primary: #f0f2f8;
+      --text-secondary: #9ca3bf;
+      --text-muted: #6b7294;
+      --accent-green: #4ade80;
+      --accent-green-dim: #22c55e;
+      --accent-blue: #60a5fa;
+      --accent-purple: #a78bfa;
+      --accent-red: #f87171;
+      --accent-orange: #fb923c;
+      --gradient-green: linear-gradient(135deg, #22c55e, #4ade80);
+      --gradient-blue: linear-gradient(135deg, #3b82f6, #60a5fa);
+      --gradient-hero: linear-gradient(180deg, #0b0f1a 0%, #111827 100%);
+      --radius: 12px;
+      --radius-lg: 20px;
+      --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.3);
+      --shadow-glow: 0 0 40px rgba(74, 222, 128, 0.1);
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: 'Inter', 'Noto Sans JP', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    /* ===== Navigation ===== */
+    .nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      background: rgba(11, 15, 26, 0.85);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid rgba(42, 51, 82, 0.5);
+      transition: background 0.3s;
+    }
+
+    .nav-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 24px;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .nav-logo {
+      font-size: 1.2rem;
+      font-weight: 800;
+      color: var(--text-primary);
+      text-decoration: none;
+      letter-spacing: -0.02em;
+    }
+
+    .nav-logo span {
+      color: var(--accent-green);
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 32px;
+      list-style: none;
+    }
+
+    .nav-links a {
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+
+    .nav-links a:hover {
+      color: var(--text-primary);
+    }
+
+    .nav-cta {
+      background: var(--gradient-green);
+      color: #0b0f1a !important;
+      padding: 8px 20px;
+      border-radius: 8px;
+      font-weight: 600 !important;
+      transition: opacity 0.2s !important;
+    }
+
+    .nav-cta:hover {
+      opacity: 0.9;
+      color: #0b0f1a !important;
+    }
+
+    /* ===== Hero ===== */
+    .hero {
+      position: relative;
+      padding: 160px 24px 100px;
+      text-align: center;
+      background: var(--gradient-hero);
+      overflow: hidden;
+    }
+
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: -200px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 800px;
+      height: 800px;
+      background: radial-gradient(circle, rgba(74, 222, 128, 0.06) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .hero-inner {
+      max-width: 800px;
+      margin: 0 auto;
+      position: relative;
+      z-index: 1;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(74, 222, 128, 0.1);
+      border: 1px solid rgba(74, 222, 128, 0.25);
+      color: var(--accent-green);
+      padding: 6px 16px;
+      border-radius: 100px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-bottom: 28px;
+    }
+
+    .hero-badge::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      background: var(--accent-green);
+      border-radius: 50%;
+    }
+
+    .hero h1 {
+      font-size: clamp(2.2rem, 5vw, 3.4rem);
+      font-weight: 800;
+      line-height: 1.3;
+      letter-spacing: -0.03em;
+      margin-bottom: 20px;
+    }
+
+    .hero h1 .highlight {
+      background: var(--gradient-green);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero-sub {
+      font-size: clamp(1.05rem, 2.5vw, 1.25rem);
+      color: var(--text-secondary);
+      max-width: 600px;
+      margin: 0 auto 40px;
+      line-height: 1.8;
+    }
+
+    .hero-actions {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 32px;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.2s;
+      cursor: pointer;
+      border: none;
+    }
+
+    .btn-primary {
+      background: var(--gradient-green);
+      color: #0b0f1a;
+      box-shadow: 0 4px 20px rgba(74, 222, 128, 0.25);
+    }
+
+    .btn-primary:hover {
+      box-shadow: 0 6px 30px rgba(74, 222, 128, 0.35);
+      transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+      background: var(--bg-card);
+      color: var(--text-primary);
+      border: 1px solid var(--border-color);
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--text-muted);
+    }
+
+    .btn svg {
+      width: 20px;
+      height: 20px;
+    }
+
+    /* ===== Section Common ===== */
+    section {
+      padding: 100px 24px;
+    }
+
+    .section-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .section-label {
+      display: inline-block;
+      color: var(--accent-green);
+      font-size: 0.85rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 12px;
+    }
+
+    .section-title {
+      font-size: clamp(1.6rem, 4vw, 2.4rem);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 16px;
+      line-height: 1.3;
+    }
+
+    .section-desc {
+      color: var(--text-secondary);
+      font-size: 1.05rem;
+      max-width: 600px;
+      line-height: 1.8;
+    }
+
+    .section-header {
+      margin-bottom: 56px;
+    }
+
+    .section-header-center {
+      text-align: center;
+    }
+
+    .section-header-center .section-desc {
+      margin: 0 auto;
+    }
+
+    /* ===== Problem Section ===== */
+    .problem {
+      background: var(--bg-secondary);
+      border-top: 1px solid var(--border-color);
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .problem-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 60px;
+      align-items: center;
+    }
+
+    .problem-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .problem-item {
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+    }
+
+    .problem-icon {
+      flex-shrink: 0;
+      width: 40px;
+      height: 40px;
+      background: rgba(248, 113, 113, 0.1);
+      border: 1px solid rgba(248, 113, 113, 0.2);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--accent-red);
+      font-size: 1.2rem;
+    }
+
+    .problem-text h4 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .problem-text p {
+      color: var(--text-secondary);
+      font-size: 0.92rem;
+    }
+
+    .problem-visual {
+      position: relative;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: 40px;
+      text-align: center;
+    }
+
+    .problem-visual-emoji {
+      font-size: 4rem;
+      margin-bottom: 20px;
+    }
+
+    .problem-visual h3 {
+      font-size: 1.3rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: var(--accent-red);
+    }
+
+    .problem-visual p {
+      color: var(--text-secondary);
+      font-size: 0.95rem;
+    }
+
+    /* ===== Solution Section ===== */
+    .solution-flow {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      margin-top: 56px;
+    }
+
+    .flow-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: 32px 28px;
+      position: relative;
+      transition: all 0.3s;
+    }
+
+    .flow-card:hover {
+      border-color: rgba(74, 222, 128, 0.3);
+      box-shadow: var(--shadow-glow);
+      transform: translateY(-2px);
+    }
+
+    .flow-step {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      background: var(--gradient-green);
+      color: #0b0f1a;
+      border-radius: 50%;
+      font-size: 0.9rem;
+      font-weight: 800;
+      margin-bottom: 20px;
+    }
+
+    .flow-card h3 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+
+    .flow-card p {
+      color: var(--text-secondary);
+      font-size: 0.92rem;
+      line-height: 1.7;
+    }
+
+    .flow-arrow {
+      display: none;
+    }
+
+    /* ===== Screenshots Section ===== */
+    .screenshots {
+      background: var(--bg-secondary);
+      border-top: 1px solid var(--border-color);
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .screenshot-tabs {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 40px;
+    }
+
+    .screenshot-tab {
+      padding: 10px 22px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid var(--border-color);
+      background: var(--bg-card);
+      color: var(--text-secondary);
+      transition: all 0.2s;
+    }
+
+    .screenshot-tab:hover {
+      border-color: var(--text-muted);
+      color: var(--text-primary);
+    }
+
+    .screenshot-tab.active {
+      background: var(--gradient-green);
+      color: #0b0f1a;
+      border-color: transparent;
+    }
+
+    .screenshot-display {
+      position: relative;
+      max-width: 700px;
+      margin: 0 auto;
+    }
+
+    .screenshot-item {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .screenshot-item.active {
+      display: flex;
+    }
+
+    .screenshot-item img {
+      max-width: 100%;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-color);
+      box-shadow: var(--shadow-card);
+    }
+
+    .screenshot-item .screenshot-popup-img {
+      max-width: 340px;
+    }
+
+    .screenshot-caption {
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+      text-align: center;
+    }
+
+    /* ===== Features Section ===== */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+
+    .feature-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: 32px 28px;
+      transition: all 0.3s;
+    }
+
+    .feature-card:hover {
+      border-color: rgba(96, 165, 250, 0.3);
+      transform: translateY(-2px);
+    }
+
+    .feature-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      margin-bottom: 20px;
+    }
+
+    .feature-icon.green {
+      background: rgba(74, 222, 128, 0.1);
+      border: 1px solid rgba(74, 222, 128, 0.2);
+    }
+
+    .feature-icon.blue {
+      background: rgba(96, 165, 250, 0.1);
+      border: 1px solid rgba(96, 165, 250, 0.2);
+    }
+
+    .feature-icon.purple {
+      background: rgba(167, 139, 250, 0.1);
+      border: 1px solid rgba(167, 139, 250, 0.2);
+    }
+
+    .feature-icon.orange {
+      background: rgba(251, 146, 60, 0.1);
+      border: 1px solid rgba(251, 146, 60, 0.2);
+    }
+
+    .feature-card h3 {
+      font-size: 1.05rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .feature-card p {
+      color: var(--text-secondary);
+      font-size: 0.92rem;
+      line-height: 1.7;
+    }
+
+    /* ===== Cost Section ===== */
+    .cost {
+      background: var(--bg-secondary);
+      border-top: 1px solid var(--border-color);
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .cost-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 40px;
+      align-items: start;
+    }
+
+    .cost-highlight {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: 40px;
+    }
+
+    .cost-price {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .cost-price .amount {
+      font-size: 3.5rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      background: var(--gradient-green);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .cost-price .unit {
+      font-size: 1.2rem;
+      color: var(--text-secondary);
+      font-weight: 600;
+    }
+
+    .cost-sub {
+      color: var(--text-secondary);
+      font-size: 0.95rem;
+      margin-bottom: 28px;
+    }
+
+    .cost-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .cost-table th,
+    .cost-table td {
+      padding: 14px 16px;
+      text-align: left;
+      font-size: 0.9rem;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .cost-table th {
+      color: var(--text-muted);
+      font-weight: 600;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .cost-table td {
+      color: var(--text-secondary);
+    }
+
+    .cost-table tr:last-child td {
+      border-bottom: none;
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+
+    .cost-details {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .cost-detail-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius);
+      padding: 24px;
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+    }
+
+    .cost-detail-icon {
+      flex-shrink: 0;
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.3rem;
+    }
+
+    .cost-detail-card h4 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .cost-detail-card p {
+      color: var(--text-secondary);
+      font-size: 0.88rem;
+      line-height: 1.6;
+    }
+
+    .cost-note {
+      color: var(--text-muted);
+      font-size: 0.82rem;
+      margin-top: 8px;
+    }
+
+    /* ===== Tech Section ===== */
+    .tech-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      justify-content: center;
+      margin-top: 40px;
+    }
+
+    .tech-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 100px;
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+      transition: all 0.2s;
+    }
+
+    .tech-pill:hover {
+      border-color: var(--text-muted);
+      color: var(--text-primary);
+    }
+
+    .tech-pill .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .tech-pill .dot.ts { background: #3178c6; }
+    .tech-pill .dot.chrome { background: #4ade80; }
+    .tech-pill .dot.gemini { background: #60a5fa; }
+    .tech-pill .dot.webpack { background: #8dd6f9; }
+    .tech-pill .dot.mv3 { background: #fb923c; }
+
+    /* ===== Setup Section ===== */
+    .setup {
+      background: var(--bg-secondary);
+      border-top: 1px solid var(--border-color);
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .setup-steps {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 24px;
+      margin-top: 48px;
+    }
+
+    .setup-step {
+      text-align: center;
+      position: relative;
+    }
+
+    .setup-step-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: var(--bg-card);
+      border: 2px solid var(--accent-green);
+      color: var(--accent-green);
+      font-size: 1.1rem;
+      font-weight: 800;
+      margin-bottom: 16px;
+    }
+
+    .setup-step h4 {
+      font-size: 1rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .setup-step p {
+      color: var(--text-secondary);
+      font-size: 0.88rem;
+      line-height: 1.6;
+    }
+
+    .setup-code {
+      max-width: 600px;
+      margin: 48px auto 0;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .setup-code-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 16px;
+      background: rgba(255, 255, 255, 0.03);
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .setup-code-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    .setup-code-dot.red { background: #ff5f57; }
+    .setup-code-dot.yellow { background: #febc2e; }
+    .setup-code-dot.green { background: #28c840; }
+
+    .setup-code pre {
+      padding: 20px;
+      overflow-x: auto;
+      font-size: 0.88rem;
+      line-height: 1.8;
+    }
+
+    .setup-code code {
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      color: var(--text-secondary);
+    }
+
+    .setup-code .comment {
+      color: var(--text-muted);
+    }
+
+    .setup-code .cmd {
+      color: var(--accent-green);
+    }
+
+    /* ===== CTA Section ===== */
+    .cta {
+      text-align: center;
+      padding: 120px 24px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .cta::before {
+      content: '';
+      position: absolute;
+      bottom: -200px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 800px;
+      height: 800px;
+      background: radial-gradient(circle, rgba(74, 222, 128, 0.06) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .cta-inner {
+      position: relative;
+      z-index: 1;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .cta h2 {
+      font-size: clamp(1.8rem, 4vw, 2.6rem);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 16px;
+    }
+
+    .cta p {
+      color: var(--text-secondary);
+      font-size: 1.05rem;
+      margin-bottom: 36px;
+      line-height: 1.8;
+    }
+
+    .cta-actions {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    /* ===== Footer ===== */
+    .footer {
+      border-top: 1px solid var(--border-color);
+      padding: 40px 24px;
+      text-align: center;
+    }
+
+    .footer-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .footer-text {
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 24px;
+      list-style: none;
+    }
+
+    .footer-links a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.85rem;
+      transition: color 0.2s;
+    }
+
+    .footer-links a:hover {
+      color: var(--text-secondary);
+    }
+
+    /* ===== Compatibility badges ===== */
+    .compat-badges {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      margin-top: 32px;
+      flex-wrap: wrap;
+    }
+
+    .compat-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 24px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius);
+      font-size: 0.95rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+    }
+
+    .compat-badge svg {
+      width: 24px;
+      height: 24px;
+    }
+
+    /* ===== Responsive ===== */
+    @media (max-width: 900px) {
+      .problem-grid {
+        grid-template-columns: 1fr;
+        gap: 40px;
+      }
+
+      .solution-flow {
+        grid-template-columns: 1fr;
+        max-width: 420px;
+        margin-left: auto;
+        margin-right: auto;
+      }
+
+      .features-grid {
+        grid-template-columns: 1fr;
+        max-width: 480px;
+        margin-left: auto;
+        margin-right: auto;
+      }
+
+      .cost-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .setup-steps {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .nav-links {
+        display: none;
+      }
+    }
+
+    @media (max-width: 600px) {
+      .hero {
+        padding: 130px 20px 80px;
+      }
+
+      section {
+        padding: 72px 20px;
+      }
+
+      .setup-steps {
+        grid-template-columns: 1fr;
+        max-width: 320px;
+        margin-left: auto;
+        margin-right: auto;
+      }
+
+      .footer-inner {
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      .screenshot-item .screenshot-popup-img {
+        max-width: 280px;
+      }
+    }
+
+    /* ===== Animations ===== */
+    .fade-in {
+      opacity: 0;
+      transform: translateY(24px);
+      transition: opacity 0.6s ease, transform 0.6s ease;
+    }
+
+    .fade-in.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navigation -->
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="#" class="nav-logo">Meet<span>Scribe</span></a>
+      <ul class="nav-links">
+        <li><a href="#problem">課題</a></li>
+        <li><a href="#solution">解決策</a></li>
+        <li><a href="#screenshots">スクリーンショット</a></li>
+        <li><a href="#features">機能</a></li>
+        <li><a href="#cost">コスト</a></li>
+        <li><a href="https://github.com/tsubasagit/MeetScribe" target="_blank" rel="noopener" class="nav-cta">GitHub</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <header class="hero">
+    <div class="hero-inner">
+      <div class="hero-badge">Chrome拡張 v1.0.0</div>
+      <h1>
+        自分が主催していない会議でも<br>
+        <span class="highlight">ワンクリックで議事録</span>を残せる
+      </h1>
+      <p class="hero-sub">
+        Chromeのタブ音声をキャプチャし、Gemini AIが文字起こしと要約を自動生成。<br>
+        Google Meet / Zoom / Teams（ブラウザ版）すべてに対応。
+      </p>
+      <div class="hero-actions">
+        <a href="https://github.com/tsubasagit/MeetScribe" target="_blank" rel="noopener" class="btn btn-primary">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+          GitHubで見る
+        </a>
+        <a href="#solution" class="btn btn-secondary">
+          使い方を見る
+        </a>
+      </div>
+
+      <!-- Compatibility badges -->
+      <div class="compat-badges">
+        <div class="compat-badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 10l-4 4l6 6l4-16l-18 7l4 2l2 6l3-4"/></svg>
+          Google Meet
+        </div>
+        <div class="compat-badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><polygon points="17 12 10 8 10 16"/></svg>
+          Zoom
+        </div>
+        <div class="compat-badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          Teams
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Problem Section -->
+  <section class="problem" id="problem">
+    <div class="section-inner">
+      <div class="problem-grid">
+        <div class="fade-in">
+          <div class="section-header">
+            <span class="section-label">Problem</span>
+            <h2 class="section-title">主催者以外は<br>議事録を残せない</h2>
+            <p class="section-desc">
+              Google Meetの録画・文字起こし機能は、会議の主催者にしか使えません。
+              参加者にはその権限がないのが現状です。
+            </p>
+          </div>
+          <ul class="problem-list">
+            <li class="problem-item">
+              <div class="problem-icon">&#x2717;</div>
+              <div class="problem-text">
+                <h4>参加者は録画できない</h4>
+                <p>ウェビナーや他社主催の会議で、録画ボタンがグレーアウトされる</p>
+              </div>
+            </li>
+            <li class="problem-item">
+              <div class="problem-icon">&#x2717;</div>
+              <div class="problem-text">
+                <h4>文字起こし機能も使えない</h4>
+                <p>Google Meetの自動文字起こし機能も、主催者の組織設定に依存</p>
+              </div>
+            </li>
+            <li class="problem-item">
+              <div class="problem-icon">&#x2717;</div>
+              <div class="problem-text">
+                <h4>手動メモでは限界がある</h4>
+                <p>会議に集中しながら正確な議事録を取るのは困難</p>
+              </div>
+            </li>
+          </ul>
+        </div>
+        <div class="problem-visual fade-in">
+          <div class="problem-visual-emoji">&#x1F512;</div>
+          <h3>「この機能は主催者のみ使用できます」</h3>
+          <p>参加者として出席したウェビナーや打ち合わせ。<br>会議後に振り返る手段がない。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Solution Section -->
+  <section id="solution">
+    <div class="section-inner">
+      <div class="section-header section-header-center fade-in">
+        <span class="section-label">Solution</span>
+        <h2 class="section-title">たった3ステップで議事録完成</h2>
+        <p class="section-desc">
+          主催者の権限は一切不要。ブラウザのタブ音声を直接キャプチャし、
+          Gemini AIが文字起こしと構造化された要約を自動生成します。
+        </p>
+      </div>
+      <div class="solution-flow fade-in">
+        <div class="flow-card">
+          <div class="flow-step">1</div>
+          <h3>録音開始</h3>
+          <p>会議中に拡張アイコンをクリックして「録音開始」を押すだけ。会議の音声はそのまま聞こえます。</p>
+        </div>
+        <div class="flow-card">
+          <div class="flow-step">2</div>
+          <h3>AI処理</h3>
+          <p>録音停止後、Gemini 2.5 Flash APIが音声を文字起こし。さらにテキストから構造化された要約を生成。</p>
+        </div>
+        <div class="flow-card">
+          <div class="flow-step">3</div>
+          <h3>議事録完成</h3>
+          <p>概要・議論ポイント・決定事項・アクションアイテムが整理された議事録が完成。ワンクリックでコピー。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Screenshots Section -->
+  <section class="screenshots" id="screenshots">
+    <div class="section-inner">
+      <div class="section-header section-header-center fade-in">
+        <span class="section-label">Screenshots</span>
+        <h2 class="section-title">シンプルで直感的なUI</h2>
+        <p class="section-desc">
+          必要なのはクリックひとつ。余計な設定や操作は一切ありません。
+        </p>
+      </div>
+      <div class="fade-in">
+        <div class="screenshot-tabs">
+          <button class="screenshot-tab active" data-target="ss-standby">待機中</button>
+          <button class="screenshot-tab" data-target="ss-recording">録音中</button>
+          <button class="screenshot-tab" data-target="ss-settings">設定</button>
+          <button class="screenshot-tab" data-target="ss-results">結果画面</button>
+        </div>
+        <div class="screenshot-display">
+          <div class="screenshot-item active" id="ss-standby">
+            <img src="popup-screenshot.png" alt="MeetScribe 待機中のポップアップ画面" class="screenshot-popup-img">
+            <p class="screenshot-caption">拡張アイコンをクリックするとポップアップが開きます。「録音開始」を押すだけ。</p>
+          </div>
+          <div class="screenshot-item" id="ss-recording">
+            <img src="popup-recording-screenshot.png" alt="MeetScribe 録音中のポップアップ画面" class="screenshot-popup-img">
+            <p class="screenshot-caption">録音中はタイマーが表示されます。会議の音声はそのまま聞こえます。</p>
+          </div>
+          <div class="screenshot-item" id="ss-settings">
+            <img src="popup-settings-screenshot.png" alt="MeetScribe 設定画面" class="screenshot-popup-img">
+            <p class="screenshot-caption">Gemini API Keyと出力言語を設定。初回のみの操作です。</p>
+          </div>
+          <div class="screenshot-item" id="ss-results">
+            <img src="results-screenshot.png" alt="MeetScribe 結果画面 - 要約と文字起こし">
+            <p class="screenshot-caption">構造化された要約と、タイムスタンプ付きの文字起こしが表示されます。</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features Section -->
+  <section id="features">
+    <div class="section-inner">
+      <div class="section-header section-header-center fade-in">
+        <span class="section-label">Features</span>
+        <h2 class="section-title">必要な機能を、シンプルに</h2>
+      </div>
+      <div class="features-grid fade-in">
+        <div class="feature-card">
+          <div class="feature-icon green">&#x1F3A4;</div>
+          <h3>タブ音声キャプチャ</h3>
+          <p>chrome.tabCapture APIでブラウザのタブ音声を直接録音。マイクや画面共有は不要です。</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon blue">&#x1F4DD;</div>
+          <h3>話者区別 + タイムスタンプ</h3>
+          <p>Gemini AIが話者を自動識別し、タイムスタンプ付きで文字起こし。誰がいつ何を言ったか明確に。</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon purple">&#x1F4CB;</div>
+          <h3>構造化された要約</h3>
+          <p>概要・議論ポイント・決定事項・アクションアイテム（担当者・期限付き）を自動生成。</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon green">&#x1F509;</div>
+          <h3>音声パススルー</h3>
+          <p>録音中も会議の音声はそのまま聞こえます。普段通り会議に参加できます。</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon orange">&#x1F4CB;</div>
+          <h3>Markdownコピー</h3>
+          <p>議事録をMarkdown形式でワンクリックコピー。Google ドキュメントやNotionにそのまま貼れます。</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon blue">&#x1F310;</div>
+          <h3>マルチプラットフォーム</h3>
+          <p>Google Meet / Zoom / Teams ブラウザ版すべてに対応。タブで音が出ていれば何でも録れます。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Cost Section -->
+  <section class="cost" id="cost">
+    <div class="section-inner">
+      <div class="section-header section-header-center fade-in">
+        <span class="section-label">Cost</span>
+        <h2 class="section-title">驚くほど低コスト</h2>
+        <p class="section-desc">
+          Gemini API の従量課金で、専用サービスの何分の一かのコストで利用できます。
+        </p>
+      </div>
+      <div class="cost-grid fade-in">
+        <div class="cost-highlight">
+          <div class="cost-price">
+            <span class="amount">~0.2</span>
+            <span class="unit">円 / 分</span>
+          </div>
+          <p class="cost-sub">1時間の会議でも約12円</p>
+          <table class="cost-table">
+            <thead>
+              <tr>
+                <th>利用パターン</th>
+                <th>コスト</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>30分の打ち合わせ</td>
+                <td>約6円</td>
+              </tr>
+              <tr>
+                <td>1時間の会議</td>
+                <td>約12円</td>
+              </tr>
+              <tr>
+                <td>月20回利用（1h/回）</td>
+                <td>約240円/月</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="cost-note">※ Gemini 2.0 Flash API料金。1USD=150円で換算。</p>
+        </div>
+        <div class="cost-details">
+          <div class="cost-detail-card">
+            <div class="cost-detail-icon" style="background: rgba(74, 222, 128, 0.1);">&#x1F4B0;</div>
+            <div>
+              <h4>サブスク不要</h4>
+              <p>月額料金なし。使った分だけの従量課金。会議がない月はゼロ円。</p>
+            </div>
+          </div>
+          <div class="cost-detail-card">
+            <div class="cost-detail-icon" style="background: rgba(96, 165, 250, 0.1);">&#x1F511;</div>
+            <div>
+              <h4>自分のAPIキー</h4>
+              <p>Google AI StudioでGemini API Keyを無料取得。利用料金はGoogleに直接支払い。</p>
+            </div>
+          </div>
+          <div class="cost-detail-card">
+            <div class="cost-detail-icon" style="background: rgba(167, 139, 250, 0.1);">&#x26A1;</div>
+            <div>
+              <h4>2フェーズ処理でコスト最適化</h4>
+              <p>音声→テキスト変換（$0.70/M）と要約生成（$0.10/M）を分離。要約のコストはほぼゼロ。</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Tech Section -->
+  <section id="tech">
+    <div class="section-inner">
+      <div class="section-header section-header-center fade-in">
+        <span class="section-label">Tech Stack</span>
+        <h2 class="section-title">モダンな技術スタック</h2>
+        <p class="section-desc">
+          最新のChrome Extension Manifest V3に準拠。TypeScriptで型安全に実装。
+        </p>
+      </div>
+      <div class="tech-pills fade-in">
+        <span class="tech-pill"><span class="dot chrome"></span>Chrome Extension</span>
+        <span class="tech-pill"><span class="dot mv3"></span>Manifest V3</span>
+        <span class="tech-pill"><span class="dot ts"></span>TypeScript</span>
+        <span class="tech-pill"><span class="dot gemini"></span>Gemini 2.5 Flash API</span>
+        <span class="tech-pill"><span class="dot webpack"></span>Webpack</span>
+        <span class="tech-pill"><span class="dot chrome"></span>chrome.tabCapture API</span>
+        <span class="tech-pill"><span class="dot ts"></span>MediaRecorder</span>
+        <span class="tech-pill"><span class="dot gemini"></span>AudioContext</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Setup Section -->
+  <section class="setup" id="setup">
+    <div class="section-inner">
+      <div class="section-header section-header-center fade-in">
+        <span class="section-label">Setup</span>
+        <h2 class="section-title">セットアップ</h2>
+        <p class="section-desc">
+          GitHubからクローンしてビルドするだけ。5分で使い始められます。
+        </p>
+      </div>
+      <div class="setup-steps fade-in">
+        <div class="setup-step">
+          <div class="setup-step-num">1</div>
+          <h4>クローン & ビルド</h4>
+          <p>リポジトリをクローンし、npm installとbuildを実行</p>
+        </div>
+        <div class="setup-step">
+          <div class="setup-step-num">2</div>
+          <h4>Chromeに読み込み</h4>
+          <p>chrome://extensions で開発者モードON、distフォルダを読み込み</p>
+        </div>
+        <div class="setup-step">
+          <div class="setup-step-num">3</div>
+          <h4>APIキー設定</h4>
+          <p>拡張の設定画面でGemini API Keyを入力して保存</p>
+        </div>
+        <div class="setup-step">
+          <div class="setup-step-num">4</div>
+          <h4>録音開始</h4>
+          <p>会議タブで拡張アイコンをクリック、「録音開始」を押す</p>
+        </div>
+      </div>
+      <div class="setup-code fade-in">
+        <div class="setup-code-header">
+          <span class="setup-code-dot red"></span>
+          <span class="setup-code-dot yellow"></span>
+          <span class="setup-code-dot green"></span>
+        </div>
+        <pre><code><span class="comment"># リポジトリをクローン</span>
+<span class="cmd">git clone</span> https://github.com/tsubasagit/MeetScribe.git
+<span class="cmd">cd</span> MeetScribe
+
+<span class="comment"># 依存関係インストール & ビルド</span>
+<span class="cmd">npm install</span>
+<span class="cmd">npm run build</span>
+
+<span class="comment"># → dist/ フォルダをChromeに読み込む</span></code></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA Section -->
+  <section class="cta">
+    <div class="cta-inner fade-in">
+      <h2>会議の価値を<br>取りこぼさない</h2>
+      <p>
+        MeetScribeで、すべての会議を確実に記録。<br>
+        オープンソースで、今すぐ使い始められます。
+      </p>
+      <div class="cta-actions">
+        <a href="https://github.com/tsubasagit/MeetScribe" target="_blank" rel="noopener" class="btn btn-primary">
+          <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+          GitHubリポジトリ
+        </a>
+        <a href="#setup" class="btn btn-secondary">
+          セットアップ手順
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="footer-inner">
+      <p class="footer-text">MeetScribe v1.0.0 &mdash; AI議事録 Chrome拡張</p>
+      <ul class="footer-links">
+        <li><a href="https://github.com/tsubasagit/MeetScribe" target="_blank" rel="noopener">GitHub</a></li>
+        <li><a href="https://github.com/tsubasagit/MeetScribe/issues" target="_blank" rel="noopener">Issues</a></li>
+        <li><a href="https://github.com/tsubasagit/MeetScribe/blob/main/README.md" target="_blank" rel="noopener">README</a></li>
+      </ul>
+    </div>
+  </footer>
+
+  <!-- Scripts -->
+  <script>
+    // Screenshot tabs
+    document.querySelectorAll('.screenshot-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.screenshot-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.screenshot-item').forEach(item => item.classList.remove('active'));
+        tab.classList.add('active');
+        const target = tab.getAttribute('data-target');
+        document.getElementById(target).classList.add('active');
+      });
+    });
+
+    // Fade-in on scroll
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+        }
+      });
+    }, {
+      threshold: 0.1,
+      rootMargin: '0px 0px -40px 0px'
+    });
+
+    document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+  </script>
+
+</body>
+</html>
