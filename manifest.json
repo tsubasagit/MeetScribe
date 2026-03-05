@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "MeetScribe - AI議事録",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "MeetScribe - 会議タブの音声をキャプチャし、AIで文字起こし+要約を生成するChrome拡張",
   "permissions": [
     "tabCapture",

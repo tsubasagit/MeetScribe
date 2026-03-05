@@ -94,11 +94,28 @@ export async function transcribeAudio(
 - 話者が区別できる場合は「話者A:」「話者B:」のように話者ラベルを付ける
 - タイムスタンプを [MM:SS] 形式で適宜付与する
 - 相槌や不明瞭な部分は (不明瞭) と記載する
+- 日本語テキストのトークン間にスペースを入れないこと（自然な日本語表記にする）
 - 出力は文字起こしテキストのみ（説明や前置きは不要）`,
     },
   ];
 
-  return callGemini(apiKey, parts);
+  const text = await callGemini(apiKey, parts);
+  return removeJapaneseSpaces(text);
+}
+
+/**
+ * 日本語文字同士の間の不要なスペースを除去する
+ */
+function removeJapaneseSpaces(text: string): string {
+  const jp = '[\\u3000-\\u303F\\u3040-\\u309F\\u30A0-\\u30FF\\u4E00-\\u9FFF\\uFF00-\\uFFEF]';
+  const regex = new RegExp(`(${jp})\\s+(${jp})`, 'g');
+  let result = text;
+  let prev = '';
+  while (result !== prev) {
+    prev = result;
+    result = result.replace(regex, '$1$2');
+  }
+  return result;
 }
 
 /**
